@@ -4,14 +4,6 @@ import numpy as np
 import pickle
 from sklearn.ensemble import RandomForestClassifier
 
-st.write("""
-# Penguin Prediction App
-
-This app predicts the **Palmer Penguin** species!
-
-Data obtained from the [palmerpenguins library](https://github.com/allisonhorst/palmerpenguins) in R by Allison Horst.
-""")
-
 import streamlit as st
 import datetime
 
@@ -40,10 +32,6 @@ st.help(range)
 st.write("Test with write")
 
 st.write(range(10))
-
-from PIL import Image
-img = Image.open("C:/Users/tred1/PycharmProjects/pythonProject2/image.jpg")
-st.image(img, width=300, caption="Simple Image")
 
 if st.checkbox ("Show/Hide"):
     st.text("Showing of Hiding Widget")
