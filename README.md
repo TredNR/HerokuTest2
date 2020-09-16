@@ -1,4 +1,4 @@
-# Ai web app deployed on Heroku
+# Web app deployed on Heroku
 
 The deployed web app is live at https://ai-psuti.herokuapp.com/
 
