@@ -1,103 +1,195 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import pickle
 from sklearn.ensemble import RandomForestClassifier
+from scipy.integrate import odeint
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime, timedelta
+import pandas as pd
 
-import streamlit as st
-import datetime
+def main():
 
-st.title ("Test using different possibilities")
+# Заголовок
+    """ Test Dataset (3) """
+    st.title("Example of an interactive model")
+    st.text("In the process of revision")
 
-st.header ("some text")
+    st.subheader("Mathematical formulas")
+    r'''
+    $$\frac{dS}{dt} = -\beta*I*\frac{S}{N}$$
+    
+    $$\frac{dE}{dt} = \beta * I * \frac{S}{N} - \delta * E$$
 
-st.subheader ("littel text")
+    $$\frac{dI}{dt} = \delta * E - (1 - \alpha) * \gamma * \rho * I$$
 
-st.text ('text')
+    $$\frac{dR}{dt} = (1 - \alpha) * \gamma*I$$
+    
+    $$\frac{dD}{dt} = \alpha * \rho * I$$
+    '''
 
-st.markdown ("### Bolt")
+# Используемые уравнения при построении
+    def SEIRD(y, t, N, beta, gamma, delta, alpha_opt, rho):
+        S, E, I, R, D = y
 
-st.success ("Successful")
+        def alpha(t):
+            return s * I / N + alpha_opt
 
-st.info("Information")
+        dSdt = -beta(t) * S * I / N
+        dEdt = beta(t) * S * I / N - delta * E
+        dIdt = delta * E - (1 - alpha(t)) * gamma * I - alpha(t) * rho * I
+        dRdt = (1 - alpha(t)) * gamma * I
+        dDdt = alpha(t) * rho * I
+        return dSdt, dEdt, dIdt, dRdt, dDdt
 
-st.warning("This is a warning")
+# Настройка параметров системы
+    st.subheader("System parameters")
 
-st.error ("This is an error")
+    D = st.slider('[D] Number of days an infected person has and can spread the disease', min_value=1.0, max_value=4.0, value=4.0, step=0.1)
+    delta = 1.0 / st.slider('[δ] Incubation period', min_value=1, max_value=7, value=5, step=1)
+    rho = 1 / st.slider('[ρ] Days from infection until death', min_value=1, max_value=10, value=9, step=1)
+    gamma = 1.0 / D
+    st.write("[γ]", gamma, " - the proportion of infected recovering per day (γ = 1/D)")
+    #alpha = st.slider('Death rate (%)', min_value=0.1, max_value=1.0, value=0.2, step=0.1)
 
-st.exception ("NameError ('name three not defined')")
+# Показатели возрастных групп и средний уровень смертности
+    alpha_by_agegroup = {"0-29": 0.01, "30-59": 0.05, "60-89": 0.2, "89+": 0.3}
+    proportion_of_agegroup = {"0-29": 0.1, "30-59": 0.3, "60-89": 0.4, "89+": 0.2}
+    s = 0.01
+    alpha_opt = sum(alpha_by_agegroup[i] * proportion_of_agegroup[i] for i in list(alpha_by_agegroup.keys()))
 
-st.help(range)
+# Параметры условия "Когда лучше всего ввести карантин"
+    R_0_start, k, x0, R_0_end = 5.0, 0.5, 50, 0.5
+    def logistic_R_0(t):
+        return (R_0_start-R_0_end) / (1 + np.exp(-k*(-t+x0))) + R_0_end
 
-st.write("Test with write")
+# Установка начальных условий
+    st.subheader("Starting conditions")
 
-st.write(range(10))
+    N = st.slider('Population', min_value=10, max_value=1000000, value=500000, step=1)
+    S0 = st.slider('Number of people susceptible', min_value=1, max_value=(N - 1), value=(N - 1), step=1)
+    I0 = st.slider('Number of people infected', min_value=1, max_value=(N - S0 - 1), value=1, step=1)
+    R0 = st.slider('Number of people recovered', min_value=0, max_value=(N - S0 - I0 - 1), value=0, step=1)
+    E0 = 0
+    st.write("Number of people exposed", E0)
+    D0 = 0
+    st.write("Number of people dead", D0)
 
-if st.checkbox ("Show/Hide"):
-    st.text("Showing of Hiding Widget")
+    y0 = S0, E0, I0, R0, D0
 
-status = st.radio ("What is your status", ("Active", "Inactive"))
-if status =='Active':
-    st.success("You are Active")
-else:
-    st.warning("Inactive, Active")
+    st.subheader("Lockdown settings")
 
-occupation = st.selectbox("Your Occupation", ["Programmer", "DataScientist", "Doctor", "Businessman"])
-st.write("You selected this option ", occupation)
+# Параметр карантина (через сколько дней его начать)
+    L = st.slider('After days', min_value=0, max_value=100, value=40, step=1)
 
-location = st.multiselect("Where do you work?", ('London', 'New York', 'Moscow', 'Kiev'))
-st.write("You selected", len(location), 'location')
+    def R_0(t):
+        return 5.0 if t < L else 0.9
+    def beta(t):
+        return R_0(t) * gamma
 
-level = st.slider('What is your level?', 1.0,5.0)
+# Установка даты
+    st.subheader("Date settings")
 
-st.button("Simple Button")
+    today = datetime.today()
+    start_day = datetime.strptime('2020-08-01', '%Y-%m-%d')
+    start = st.date_input('Start date', start_day)
+    end = st.date_input('End date', today)
+    last = end - timedelta(days=1)
 
-if st.button("About"):
-    st.text("Maybe... streamlit is coll")
+# Проверка условия согласованности
+    if start < end:
+        st.success('Start date: `%s`\n\nEnd date: `%s`\n\n' % (start, end))
+    else:
+        st.error('Error: End date must fall after start date.')
 
-firstname = st.text_input("Enter Your Firstname", "Type Here")
-if st.button("Submit", key=1):
-    result = firstname.title()
-    st.success(result)
+    if start < last:
+        st.success('Start date: `%s`\n\nLast date: `%s`\n\n' % (start, last))
+    else:
+        st.error('Error: Last date must fall after start date.')
 
-massage =st.text_area("Enter Your massage", "Type Here")
-if st.button("Submit", key=2):
-    result = massage.title()
-    st.success(result)
+# Определение периода дней
+    period = end - start
+    days_full = period.days
+    st.write("Period = ", days_full, " days")
 
-today = st.date_input("Today is ", datetime.datetime.now())
+# Установка array [0, 1, 2, ... days_full] из дней
+    t = np.linspace(0, days_full-1, days_full)
 
-the_time = st.time_input("The time is", datetime.datetime.now())
+    ret = odeint(SEIRD, y0, t, args=(N, beta, gamma, delta, alpha_opt, rho))
+    S, E, I, R, D = ret.T
 
-st.text ("Display JSON")
-st.json({'name': 'Konstantin', 'gender': 'male'})
+    R0_over_time = [logistic_R_0(i) for i in range(len(t))]
+    Alpha_over_time = [s * I[i]/N + alpha_opt for i in range(len(t))]
 
-st.text("Display Raw Code")
-st. code ("import numpy as np")
+    first_date = np.datetime64(start)
+    x_ticks = pd.date_range(start=first_date, periods=days_full, freq="D")
 
-with st.echo():
-    #Funny comment
-    import pandas as pd
-    df = pd.DataFrame()
+# ----------------------------- Функция построения графиков ---------------------------------------
+    def plotsir(S, E, I, R, D=None, t1=None, x_ticks=None, L=None, R0=None, Alpha=None):
+        f, ax = plt.subplots(1, 1, figsize=(10, 4))
 
+# Условие вывода графика с датой
+        ax.plot(x_ticks, S, 'b', alpha=0.7, linewidth=2, label='Susceptible')
+        ax.plot(x_ticks, E, 'y', alpha=0.7, linewidth=2, label='Exposed')
+        ax.plot(x_ticks, I, 'r', alpha=0.7, linewidth=2, label='Infected')
+        ax.plot(x_ticks, R, 'g', alpha=0.7, linewidth=2, label='Recovered')
+        if D is not None:
+            ax.plot(x_ticks, D, 'k', alpha=0.7, linewidth=2, label='Dead')
+            ax.plot(x_ticks, S + E + I + R + D, 'c--', alpha=0.7, linewidth=2, label='Total')
+        else:
+            ax.plot(x_ticks, S + E + I + R, 'c--', alpha=0.7, linewidth=2, label='Total')
+            ax.xaxis.set_minor_locator(mdates.MonthLocator())
+            #ax.set_xticks(x_ticks)
+        f.autofmt_xdate()
 
-import time
-my_bar = st.progress(0)
-for p in range(1):
-    my_bar.progress(p+1)
-    time.sleep(0)
+        ax.grid(b=True, which='major', c='w', lw=2, ls='-')
+        legend = ax.legend()
+        legend.get_frame().set_alpha(0.5)
+        for spine in ('top', 'right', 'bottom', 'left'):
+            ax.spines[spine].set_visible(False)
 
-with st.spinner ("Waiting"):
-    time.sleep(0)
-st.success("Finished :3")
+# Условие простого карантина (введенного после определенного количества дней)
+        if L is not None:
+            plt.title("Lockdown after {} days".format(L))
+        st.pyplot()
 
-#st.balloons()
+        if R0 is not None:
+            ax1 = f.add_subplot()
+            ax1.plot(t1, R0, 'b--', alpha=0.7, linewidth=2, label='R_0')
 
-st.sidebar.header("About")
-st.sidebar.text("This is Streamlit tut")
+            ax1.set_xlabel('Time (days)')
+            ax1.title.set_text('R_0 over time')
+            ax1.yaxis.set_tick_params(length=0)
+            ax1.xaxis.set_tick_params(length=0)
+            ax1.yaxis.set_tick_params(length=0)
+            ax1.xaxis.set_tick_params(length=0)
+            ax1.grid(b=True, which='major', c='w', lw=2, ls='-')
+            legend = ax1.legend()
+            legend.get_frame().set_alpha(0.5)
+            for spine in ('top', 'right', 'bottom', 'left'):
+                ax.spines[spine].set_visible(False)
+            st.pyplot()
 
-@st.cache
-def run_fxn():
-    return range(100)
+        if Alpha is not None:
+            ax2 = f.add_subplot()
+            ax2.plot(t1, Alpha, 'r--', alpha=0.7, linewidth=2, label='alpha')
+            ax2.set_xlabel('Time (days)')
+            ax2.title.set_text('Fatality rate over time')
+            ax2.yaxis.set_tick_params(length=0)
+            ax2.xaxis.set_tick_params(length=0)
+            ax2.grid(b=True, which='major', c='w', lw=2, ls='-')
+            legend = ax2.legend()
+            legend.get_frame().set_alpha(0.5)
+            for spine in ('top', 'right', 'bottom', 'left'):
+                ax.spines[spine].set_visible(False)
+            st.pyplot()
 
-st.write(run_fxn())
+    if st.button("Show plot`s", key=1):
+        plotsir(S, E, I, R, x_ticks=x_ticks, t1=t, D=D, L=L, R0=R0_over_time, Alpha=Alpha_over_time)
+
+    if st.button ("Show plot from altair", key=2):
+        st.line_chart(Alpha_over_time)
+
+# Ну тут и так понятно
+if __name__ == '__main__':
+    main()
