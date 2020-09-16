@@ -1,6 +1,4 @@
 import streamlit as st
-import pickle
-from sklearn.ensemble import RandomForestClassifier
 from scipy.integrate import odeint
 import numpy as np
 import matplotlib.pyplot as plt
